@@ -3,7 +3,21 @@
 * Author       : Caille Jimmy, ICT student in Telecomunication Networks and Information Security
 * Prerequisite : install libcurl-dev
 * Compile      : gcc attack.c -o attack -lcurl -Wall -Wextra
-* Usage        : ./attack
+* Usage        : ./attack -h
+*      [param] [remark]            [default value]
+* Usage: -h    help, this message  -none-
+*        -U    URL, necessary !    -none-
+*        -u    username            admin
+*        -f    username field name username
+*        -p    password DB name    password
+*        -P    password field name password
+*        -m    password min len    1
+*        -M    password max len    20
+*        -c    char min (decimal)  ' ' (32)
+*        -C    char max (decimal)  '~' (126)
+*        -s    success message     Welcome
+*        -v    verbose             disabled
+*
 * License      : Unlicense, for more information, please refer to <https://unlicense.org>
 *
 * Version      : v0.2 - attacking multiple usernames
