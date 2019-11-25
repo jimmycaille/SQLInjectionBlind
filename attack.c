@@ -21,6 +21,7 @@
 * License      : Unlicense, for more information, please refer to <https://unlicense.org>
 *
 * Version      : v0.2 - attacking multiple usernames
+*                v0.3 - parameters added, multiple username removed
 *
 *************************************************************************************************/
 #include <stdio.h>
