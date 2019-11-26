@@ -9,12 +9,13 @@
 * 
 * Prerequisite : install libcurl-dev
 * Compile      : gcc attack.c -o attack -lcurl -Wall -Wextra
-* Usage        : ./attack -h
+* Launch       : ./attack -h
+*
 *      [param] [remark]            [default value]
 * Usage: -h    help, this message  -none-
 *        -U    URL, necessary !    -none-
 *        -u    username            admin
-*        -f    username field name username
+*        -f    username field name login
 *        -p    password DB name    password
 *        -P    password field name password
 *        -m    password min len    1
@@ -23,6 +24,8 @@
 *        -C    char max (decimal)  '~' (126)
 *        -s    success message     Welcome
 *        -v    verbose             disabled
+*        -r    html responses      disabled
+*        -d    libcurl debug       disabled
 *
 * License      : Unlicense, for more information, please refer to <https://unlicense.org>
 *
