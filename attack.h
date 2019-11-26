@@ -1,5 +1,5 @@
-#ifndef HEADER_FILE
-#define HEADER_FILE
+#ifndef ATTACK_HEADER_FILE
+#define ATTACK_HEADER_FILE
 
 //used for text response handling
 struct string {
